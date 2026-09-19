@@ -1,0 +1,36 @@
+#!/system/bin/sh
+# 旁路供电命令行 (供磁贴类 App / 终端调用, 无常驻进程)
+#   su -c '/data/adb/modules/bypass-charge/cli on|off|toggle|status'
+MODDIR=${0%/*}
+[ -f "$MODDIR/config" ] || MODDIR=$(dirname "$(readlink -f "$0")")
+NODE=/sys/class/qcom-battery/night_charging
+CONF=$MODDIR/config
+
+[ -f "$CONF" ] || printf 'ENABLED=1\n' > "$CONF"
+ENABLED=1
+. "$CONF"
+
+enable() {
+    chmod 660 "$NODE" 2>/dev/null
+    echo 1 > "$NODE"
+    chmod 440 "$NODE" 2>/dev/null
+    printf 'ENABLED=1\n' > "$CONF"
+    echo "旁路供电: ON  (充到 80% 后适配器直供)"
+}
+disable() {
+    chmod 660 "$NODE" 2>/dev/null
+    echo 0 > "$NODE"
+    printf 'ENABLED=0\n' > "$CONF"
+    echo "旁路供电: OFF"
+}
+
+case "$1" in
+    on)     enable ;;
+    off)    disable ;;
+    toggle) [ "$ENABLED" = "1" ] && disable || enable ;;
+    status|"")
+        echo "开关: $([ "$ENABLED" = "1" ] && echo 已启用 || echo 已禁用)"
+        echo "节点: $(cat "$NODE" 2>/dev/null)  ($(ls -l "$NODE" 2>/dev/null | cut -d' ' -f1))"
+        echo "电量: $(cat /sys/class/power_supply/battery/capacity)%   适配器: $([ "$(cat /sys/class/power_supply/usb/online)" = "1" ] && echo 已连接 || echo 未连接)   电池电流: $(cat /sys/class/power_supply/battery/current_now) uA" ;;
+    *)      echo "用法: cli on|off|toggle|status" ;;
+esac
